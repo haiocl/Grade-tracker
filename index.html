@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
+  <title>Grade Tracker</title>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <div>
+        <div class="eyebrow">GRADE TRACKER</div>
+        <h1>📊 Điểm của tôi</h1>
+      </div>
+      <button id="clearAll" class="icon-btn" title="Xóa toàn bộ dữ liệu">🗑️</button>
+    </header>
+
+    <section class="card hero">
+      <label for="subject">Môn học</label>
+      <input id="subject" value="Tiếng Nhật" maxlength="40">
+      <div class="avg-row">
+        <div>
+          <div class="muted">Điểm trung bình</div>
+          <div id="average" class="average">0.00</div>
+        </div>
+        <div class="count">
+          <b id="count">0</b><span>bài</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <h2>Thêm điểm</h2>
+        <span>0–10</span>
+      </div>
+      <form id="gradeForm">
+        <div class="grid">
+          <div>
+            <label for="name">Tên bài</label>
+            <input id="name" placeholder="VD: Bài 5" required>
+          </div>
+          <div>
+            <label for="score">Điểm</label>
+            <input id="score" type="number" min="0" max="10" step="0.1" placeholder="8.5" required>
+          </div>
+        </div>
+        <div class="grid">
+          <div>
+            <label for="date">Ngày</label>
+            <input id="date" type="date" required>
+          </div>
+          <div>
+            <label for="note">Ghi chú</label>
+            <input id="note" placeholder="Kanji, nghe...">
+          </div>
+        </div>
+        <button class="primary" type="submit">＋ Lưu điểm</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <h2>Lịch sử điểm</h2>
+        <button id="sortBtn" class="small-btn">Mới nhất</button>
+      </div>
+      <div id="empty" class="empty">Chưa có điểm nào. Thêm bài đầu tiên nhé!</div>
+      <div id="list"></div>
+    </section>
+
+    <section class="card goal">
+      <div class="section-title">
+        <h2>🎯 Mục tiêu</h2>
+      </div>
+      <div class="grid">
+        <div>
+          <label for="target">Điểm TB mục tiêu</label>
+          <input id="target" type="number" min="0" max="10" step="0.1" value="8">
+        </div>
+        <div class="goal-result" id="goalResult">Nhập thêm điểm để xem dự đoán.</div>
+      </div>
+    </section>
+
+    <footer>Dữ liệu được lưu trên chính điện thoại này.</footer>
+  </main>
+<script>
+const KEY="gradeTracker_v1";
+let state=JSON.parse(localStorage.getItem(KEY)||'{"subject":"Tiếng Nhật","target":8,"grades":[]}');
+let newestFirst=true;
+
+const $=id=>document.getElementById(id);
+$("subject").value=state.subject;
+$("target").value=state.target;
+$("date").value=new Date().toISOString().slice(0,10);
+
+function save(){ localStorage.setItem(KEY,JSON.stringify(state)); render(); }
+function avg(){ return state.grades.length ? state.grades.reduce((a,g)=>a+g.score,0)/state.grades.length : 0; }
+function fmt(n){return Number(n).toFixed(2)}
+
+function render(){
+  $("average").textContent=fmt(avg());
+  $("count").textContent=state.grades.length;
+  $("empty").style.display=state.grades.length?"none":"block";
+  const arr=[...state.grades].sort((a,b)=>newestFirst?b.date.localeCompare(a.date):a.date.localeCompare(b.date));
+  $("list").innerHTML=arr.map(g=>`
+    <div class="grade">
+      <div class="grade-main">
+        <b>${esc(g.name)}</b>
+        <span>${g.date}${g.note?` · ${esc(g.note)}`:""}</span>
+      </div>
+      <strong>${fmt(g.score)}</strong>
+      <button class="delete" data-id="${g.id}">×</button>
+    </div>`).join("");
+  document.querySelectorAll(".delete").forEach(b=>b.onclick=()=>{
+    state.grades=state.grades.filter(g=>g.id!==b.dataset.id); save();
+  });
+  const target=Number(state.target)||0, n=state.grades.length, a=avg();
+  if(!n){$("goalResult").textContent="Nhập thêm điểm để xem dự đoán.";return}
+  if(a>=target){$("goalResult").textContent=`Đã đạt mục tiêu ${fmt(target)} 🎉`;return}
+  // score needed on next test to reach target
+  const need=target*(n+1)-a*n;
+  $("goalResult").textContent=need<=10
+    ? `Bài tiếp theo cần khoảng ${fmt(need)} để TB đạt ${fmt(target)}.`
+    : `Một bài chưa đủ để đạt ${fmt(target)}. Cần điểm rất cao hoặc thêm vài bài tốt.`;
+}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+
+$("gradeForm").onsubmit=e=>{
+  e.preventDefault();
+  const score=Number($("score").value);
+  if(score<0||score>10)return alert("Điểm phải từ 0 đến 10.");
+  state.grades.push({id:crypto.randomUUID(),name:$("name").value.trim(),score,date:$("date").value,note:$("note").value.trim()});
+  $("name").value=""; $("score").value=""; $("note").value="";
+  save();
+};
+$("subject").oninput=()=>{state.subject=$("subject").value;localStorage.setItem(KEY,JSON.stringify(state))};
+$("target").oninput=()=>{state.target=Number($("target").value);save()};
+$("sortBtn").onclick=()=>{newestFirst=!newestFirst;$("sortBtn").textContent=newestFirst?"Mới nhất":"Cũ nhất";render()};
+$("clearAll").onclick=()=>{
+  if(confirm("Xóa toàn bộ điểm đã lưu?")){state.grades=[];save()}
+};
+render();
+
+if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js");
+</script>
+</body>
+</html>
